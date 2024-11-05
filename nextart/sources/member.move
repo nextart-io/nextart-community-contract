@@ -1,28 +1,35 @@
 module nextart::member {
     use sui::display;
     use sui::package;
+    use sui::vec_map::{Self,VecMap};
     use std::string::{String};
-    use nextart::badge::{BadgeList,Badge,create_badge};
+    use nextart::badge::{BadgeCollection,Badge,BadgeList,create_badge,get_badge_id,create_badge_collection};
+
+    // ===== ERRORS =====
+    const EBadgeAlreadyStaked:u64 = 0;
+    const EBadgeNotStaked:u64 = 1;
+
+    // ===== STRUCTS =====
 
     public struct Member has key {
         id:UID,
         name:String,
         description:String,
-        badges:vector<Badge>,
+        badges:VecMap<ID,Badge>,
     }
 
     public struct MemberList has key, store {
         id:UID,
         members:vector<ID>,
-    }
-
-    const EBadgeAlreadyStaked:u64 = 0;
-    const EBadgeNotStaked:u64 = 1;
+    }   
 
     public struct MEMBER has drop{}
+
     public struct Admin has key{
         id:UID,
     }
+
+    // ===== FUNCTIONS =====
 
     fun init(
         otw:MEMBER,
@@ -52,7 +59,41 @@ module nextart::member {
         transfer::transfer(admin,sender);
     }
 
-    public fun mint_member_nft(member_list:&mut MemberList, name:String, description:String, ctx:&mut TxContext) {
+    
+
+    public fun do_create_badge_collection(
+        _manager:&Admin,
+        badge_list:&mut BadgeList,
+        name:String,
+        description:String,
+        ctx:&mut TxContext
+    ){
+        create_badge_collection(
+            badge_list,
+            name,
+            description,
+            ctx
+        );
+    }
+
+    public entry fun do_mint_badge(
+        badge_collection:&mut BadgeCollection,
+        member:&mut Member,
+        ctx:&mut TxContext
+        ){
+        let badge = create_badge(
+            badge_collection,
+            ctx
+            );
+        stake_badge_to_member(member,badge,ctx);
+    }
+
+    public entry fun do_mint_member(
+        member_list:&mut MemberList, 
+        name:String, 
+        description:String, 
+        ctx:&mut TxContext
+    ) {
 
         let sender_id = ctx.sender().to_id();
 
@@ -64,37 +105,25 @@ module nextart::member {
             id:object::new(ctx),
             name:name,
             description:description,
-            badges:vector::empty(),
+            badges:vec_map::empty<ID,Badge>(),
         };
 
-        transfer::transfer(member,ctx.sender());
-        
-    }
-
-    public entry fun add_member_badge(
-        _manager:&Admin, 
-        badge_list:&mut BadgeList, 
-        member:&mut Member, 
-        badge_name:String, 
-        badge_description:String, 
-        badge_type:String,
-        ctx:&mut TxContext
-        ){
-        let badge = create_badge(badge_list,badge_name, badge_description, badge_type,ctx);
-        stake_badge_to_member(member,badge,ctx);
+        transfer::transfer(member,ctx.sender());        
     }
 
     public entry fun stake_badge_to_member(member:&mut Member, badge:Badge, _ctx:&mut TxContext){
         let vector_badges = &mut member.badges;
-        
-        assert!(!vector::contains(vector_badges,&badge),EBadgeAlreadyStaked);
-        vector::push_back(vector_badges,badge); 
+        let badge_id = get_badge_id(&badge);
+        assert!(!vec_map::contains(vector_badges,&badge_id),EBadgeAlreadyStaked);
+        vec_map::insert(vector_badges,badge_id,badge); 
     }
 
     public entry fun unstake_badge_from_member(member:&mut Member, badge:&Badge, ctx:&mut TxContext){
-        let vector_badges = &mut member.badges;
-        assert!(vector::contains(vector_badges,badge),EBadgeNotStaked);
-        let unstaked_badge = vector::pop_back(vector_badges);
+        let vector_badges = &mut member.badges;     
+        let badge_id = get_badge_id(badge);
+        assert!(vec_map::contains(vector_badges,&badge_id),EBadgeNotStaked);
+        let (_unstaked_badge_id,unstaked_badge) = vec_map::remove(vector_badges,&badge_id);
+        
         transfer::public_transfer(unstaked_badge,ctx.sender());
     }
 }   
