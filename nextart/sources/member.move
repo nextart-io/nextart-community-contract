@@ -1,8 +1,10 @@
 module nextart::member {
-    use sui::display;
-    use sui::package;
-    use sui::vec_map::{Self,VecMap};
     use std::string::{String};
+    use sui::{
+        display,
+        package,
+        vec_map::{Self,VecMap},        
+    };    
     use nextart::badge::{BadgeCollection,Badge,BadgeList,create_badge,get_badge_id,create_badge_collection};
 
     // ===== ERRORS =====
